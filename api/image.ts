@@ -61,7 +61,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(500).json({ error: 'No image generated' });
         } else {
             // OpenAI-compatible API
-            const response = await fetch(`${endpoint}/images/generations`, {
+            // 智能处理 endpoint：如果已经包含 /images/generations 就不再添加
+            let apiUrl = endpoint;
+            if (!endpoint.endsWith('/images/generations')) {
+                apiUrl = endpoint.replace(/\/$/, '') + '/images/generations';
+            }
+
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

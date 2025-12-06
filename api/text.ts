@@ -54,7 +54,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
         } else {
             // OpenAI-compatible API
-            const response = await fetch(`${endpoint}/chat/completions`, {
+            // 智能处理 endpoint：如果已经包含 /chat/completions 就不再添加
+            let apiUrl = endpoint;
+            if (!endpoint.endsWith('/chat/completions')) {
+                apiUrl = endpoint.replace(/\/$/, '') + '/chat/completions';
+            }
+
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
