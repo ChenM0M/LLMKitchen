@@ -1,5 +1,18 @@
 {
+    "functions": {
+        "api/*.ts": {
+            "runtime": "@vercel/node@3.0.0"
+        }
+    },
     "rewrites": [
+        {
+            "source": "/api/text",
+            "destination": "/api/text.ts"
+        },
+        {
+            "source": "/api/image",
+            "destination": "/api/image.ts"
+        },
         {
             "source": "/api/elysiver/:path*",
             "destination": "https://elysiver.h-e.top/:path*"
