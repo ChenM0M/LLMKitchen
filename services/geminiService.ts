@@ -178,8 +178,26 @@ async function callTextAPI(prompt: string): Promise<string> {
     hasTextKey: !!settings.textApiKey
   });
 
+  // 如果用户没有配置 API Key，使用后端代理 (Serverless Function)
   if (!settings.textApiKey) {
-    throw new Error('Text API key not configured. Please set it in API Settings.');
+    console.log('[API] No user config, using serverless function /api/text');
+    const response = await fetch('/api/text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 2048
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server API error: ${response.status}. Please configure API in Settings or deploy to Vercel.`);
+    }
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || '';
   }
 
   const isGemini = settings.textApiEndpoint.includes('generativelanguage.googleapis.com');
