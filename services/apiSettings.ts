@@ -256,8 +256,25 @@ export async function callTextApi(
 ): Promise<string> {
     const settings = apiSettings.get();
 
+    // 如果用户没有配置 API Key，使用后端代理 (Serverless Function)
     if (!settings.textApiKey) {
-        throw new Error('Text API key not configured');
+        const response = await fetch('/api/text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                messages,
+                temperature: options?.temperature ?? 0.7,
+                max_tokens: options?.max_tokens ?? 2048
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Server API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.choices?.[0]?.message?.content || '';
     }
 
     const isGemini = settings.textApiEndpoint.includes('generativelanguage.googleapis.com');
@@ -310,10 +327,29 @@ export async function callTextApi(
 export async function callImageApi(prompt: string): Promise<string | null> {
     const settings = apiSettings.get();
 
+    // 如果用户没有配置 API Key，使用后端代理 (Serverless Function)
     if (!settings.imageApiKey) {
-        throw new Error('Image API key not configured');
+        const response = await fetch('/api/image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Server Image API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const b64 = data.data?.[0]?.b64_json;
+        const mimeType = data.data?.[0]?.mimeType || 'image/png';
+        if (b64) {
+            return `data:${mimeType};base64,${b64}`;
+        }
+        return null;
     }
 
+    // 用户有自定义配置，直接调用
     const isGemini = settings.imageApiEndpoint.includes('generativelanguage.googleapis.com');
 
     if (isGemini) {

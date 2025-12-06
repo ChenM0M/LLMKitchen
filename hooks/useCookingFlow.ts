@@ -4,6 +4,7 @@ import { cookDish } from '../services/geminiService';
 import { audioService } from '../services/audioService';
 import { toast } from 'react-hot-toast';
 import { urlToBase64 } from '../utils/imageUtils';
+import { saveImage, getImage, generateImageId } from '../services/imageStorage';
 
 export const useCookingFlow = (language: Language) => {
     // Core State
@@ -12,23 +13,45 @@ export const useCookingFlow = (language: Language) => {
     const [activeAnimationMethod, setActiveAnimationMethod] = useState<AnyCookingMethod | null>(null);
     const [lastResult, setLastResult] = useState<DishResult | null>(null);
 
-    // History - 初始化时从 localStorage 读取
-    const [history, setHistory] = useState<DishResult[]>(() => {
-        try {
-            const savedHistory = localStorage.getItem('ai-pocket-kitchen-history');
-            if (savedHistory) {
-                return JSON.parse(savedHistory);
-            }
-        } catch (e) { }
-        return [];
-    });
+    // History - 初始化时从 localStorage 读取，然后从 IndexedDB 恢复图片
+    const [history, setHistory] = useState<DishResult[]>([]);
+    const [historyLoaded, setHistoryLoaded] = useState(false);
 
-    // Save History - 只在历史真正改变时保存
-    // 图片现在存储在 IndexedDB 中 (via imageId)，不再存储 imageUrl 到 localStorage
+    // 初始化加载 history 并恢复图片
     useEffect(() => {
+        const loadHistory = async () => {
+            try {
+                const savedHistory = localStorage.getItem('ai-pocket-kitchen-history');
+                if (savedHistory) {
+                    const parsed: DishResult[] = JSON.parse(savedHistory);
+                    // 从 IndexedDB 恢复图片
+                    const restored = await Promise.all(
+                        parsed.map(async (dish) => {
+                            if (dish.imageId) {
+                                const imageUrl = await getImage(dish.imageId);
+                                return { ...dish, imageUrl: imageUrl || undefined };
+                            }
+                            return dish;
+                        })
+                    );
+                    setHistory(restored);
+                }
+            } catch (e) {
+                console.error('Failed to load history:', e);
+            } finally {
+                setHistoryLoaded(true);
+            }
+        };
+        loadHistory();
+    }, []);
+
+    // Save History - 只在历史真正改变时保存（等待初始化完成后再保存）
+    // 图片存储在 IndexedDB 中 (via imageId)，不存储 imageUrl 到 localStorage
+    useEffect(() => {
+        if (!historyLoaded) return; // 等待初始化完成
         if (history.length > 0 || localStorage.getItem('ai-pocket-kitchen-history') === null) {
             try {
-                // Strip imageUrl from history - images are now in IndexedDB via imageId
+                // Strip imageUrl from history - images are in IndexedDB via imageId
                 const historyToSave = history.slice(0, 30).map(dish => {
                     // eslint-disable-next-line @typescript-eslint/no-unused-vars
                     const { imageUrl, ...rest } = dish;
@@ -39,23 +62,44 @@ export const useCookingFlow = (language: Language) => {
                 console.error('Failed to save history:', e);
             }
         }
-    }, [history]);
+    }, [history, historyLoaded]);
 
-    // Cookbook State
-    const [savedRecipes, setSavedRecipes] = useState<DishResult[]>(() => {
-        // 初始化时直接从 localStorage 读取
-        try {
-            const saved = localStorage.getItem('ai-pocket-kitchen-cookbook');
-            if (saved) {
-                return JSON.parse(saved);
-            }
-        } catch (e) { }
-        return [];
-    });
+    // Cookbook State - 初始化时从 localStorage 读取，然后从 IndexedDB 恢复图片
+    const [savedRecipes, setSavedRecipes] = useState<DishResult[]>([]);
+    const [recipesLoaded, setRecipesLoaded] = useState(false);
 
-    // Save Cookbook - 只在 savedRecipes 真正改变时保存
-    // 图片现在存储在 IndexedDB 中 (via imageId)
+    // 初始化加载 savedRecipes 并恢复图片
     useEffect(() => {
+        const loadRecipes = async () => {
+            try {
+                const saved = localStorage.getItem('ai-pocket-kitchen-cookbook');
+                if (saved) {
+                    const parsed: DishResult[] = JSON.parse(saved);
+                    // 从 IndexedDB 恢复图片
+                    const restored = await Promise.all(
+                        parsed.map(async (dish) => {
+                            if (dish.imageId) {
+                                const imageUrl = await getImage(dish.imageId);
+                                return { ...dish, imageUrl: imageUrl || undefined };
+                            }
+                            return dish;
+                        })
+                    );
+                    setSavedRecipes(restored);
+                }
+            } catch (e) {
+                console.error('Failed to load recipes:', e);
+            } finally {
+                setRecipesLoaded(true);
+            }
+        };
+        loadRecipes();
+    }, []);
+
+    // Save Cookbook - 只在 savedRecipes 真正改变时保存（等待初始化完成后再保存）
+    // 图片存储在 IndexedDB 中 (via imageId)
+    useEffect(() => {
+        if (!recipesLoaded) return; // 等待初始化完成
         if (savedRecipes.length > 0 || localStorage.getItem('ai-pocket-kitchen-cookbook') === null) {
             try {
                 // Strip imageUrl - images are in IndexedDB via imageId
@@ -69,7 +113,7 @@ export const useCookingFlow = (language: Language) => {
                 console.error('Failed to save cookbook:', e);
             }
         }
-    }, [savedRecipes]);
+    }, [savedRecipes, recipesLoaded]);
 
     const toggleSaveRecipe = async (dish: DishResult) => {
         const exists = savedRecipes.find(d => d.dishName === dish.dishName && d.description === dish.description);
@@ -283,6 +327,18 @@ export const useCookingFlow = (language: Language) => {
         try {
             const result = await cookDish(items, method, customer, language, precision, judgePersona);
             audioService.stopCookingSound();
+
+            // 保存图片到 IndexedDB 以实现持久化
+            if (result.imageUrl) {
+                const imageId = generateImageId(result.dishName);
+                try {
+                    await saveImage(imageId, result.imageUrl);
+                    result.imageId = imageId; // 记录 imageId 以便后续恢复
+                } catch (e) {
+                    console.error('Failed to save image to IndexedDB:', e);
+                }
+            }
+
             setLastResult(result);
             setHistory(prev => [result, ...prev]);
             return result;
