@@ -330,11 +330,23 @@ async function callImageAPI(prompt: string): Promise<string | null> {
       }
 
       const data = await response.json();
+      console.log('[IMAGE API] Serverless response:', data);
+
+      // 支持 b64_json 格式
       const b64 = data.data?.[0]?.b64_json;
-      const mimeType = data.data?.[0]?.mimeType || 'image/png';
       if (b64) {
+        const mimeType = data.data?.[0]?.mimeType || 'image/png';
         return `data:${mimeType};base64,${b64}`;
       }
+
+      // 支持 URL 格式 (SiliconFlow)
+      const url = data.data?.[0]?.url;
+      if (url) {
+        console.log('[IMAGE API] Got image URL:', url);
+        return url;
+      }
+
+      console.error('[IMAGE API] No image in response');
       return null;
     } catch (e) {
       console.error('[IMAGE API] Serverless function error:', e);
