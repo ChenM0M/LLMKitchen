@@ -1,0 +1,415 @@
+
+import React, { useState, useEffect } from 'react';
+import { PrepMethod, HeatMethod, MixMethod, AnyCookingMethod } from './types';
+import { Pantry } from './components/Pantry';
+import { KitchenCounter } from './components/KitchenCounter';
+import { WorkStation } from './components/WorkStation';
+import { ResultModal } from './components/ResultModal';
+import { StartScreen } from './components/StartScreen';
+import { RecipeBook } from './components/RecipeBook';
+import { PlayerManual } from './components/PlayerManual';
+import { DayProgressBar } from './components/DayProgressBar';
+import { DaySummaryModal } from './components/DaySummaryModal';
+import { audioService } from './services/audioService';
+import { ArrowLeft, BookOpen, Wallet, HelpCircle } from 'lucide-react';
+import { t } from './translations';
+
+// Hooks
+import { useInventory } from './hooks/useInventory';
+import { useGameSession } from './hooks/useGameSession';
+import { useCustomerManager } from './hooks/useCustomerManager';
+import { useCookingFlow } from './hooks/useCookingFlow';
+
+const App: React.FC = () => {
+    // --- 1. State Hooks ---
+    const {
+        gameMode, setGameMode, money, setMoney, day, dayTimeLeft,
+        dailyRevenue, showDaySummary, setShowDaySummary, showGameOver, setShowGameOver,
+        handleTransaction, startNextDay, language, setLanguage, theme, setTheme, RENT_COST, DAY_LENGTH
+    } = useGameSession();
+
+    const inventory = useInventory();
+    const cooking = useCookingFlow(language);
+
+    const customerManager = useCustomerManager(
+        gameMode,
+        language,
+        cooking.isCooking,
+        !!cooking.lastResult,
+        showDaySummary,
+        () => inventory.clearCookingStations() // onTimeout cleanup
+    );
+
+    // --- 2. UI State ---
+    const [activeStation, setActiveStation] = useState<'PREP' | 'MARINATE' | 'COOK' | 'BAR'>('PREP');
+    const [selectedHeat, setSelectedHeat] = useState<HeatMethod | 'raw' | null>(null);
+    const [selectedMix, setSelectedMix] = useState<MixMethod | null>(null);
+    const [showRecipeBook, setShowRecipeBook] = useState(false);
+    const [showManual, setShowManual] = useState(false);
+    const [isPantryOpen, setIsPantryOpen] = useState(false);
+    const [isViewingHistory, setIsViewingHistory] = useState(false);
+
+    // --- 3. Effects ---
+
+    // Load new customer on day change (if challenge mode)
+    useEffect(() => {
+        if (gameMode === 'CHALLENGE' && !showDaySummary && !showGameOver) {
+            customerManager.loadNewCustomer();
+        }
+    }, [day, gameMode, showDaySummary]);
+
+    // Check Bankruptcy
+    useEffect(() => {
+        const isInventoryEmpty = inventory.counterItems.length === 0 &&
+            inventory.prepItems.length === 0 &&
+            inventory.marinateItems.length === 0 &&
+            inventory.potItems.length === 0 &&
+            inventory.barItems.length === 0;
+
+        if (gameMode === 'CHALLENGE' && money < 3 && isInventoryEmpty && !cooking.isCooking && !cooking.lastResult && !showDaySummary) {
+            setShowGameOver(true);
+        }
+    }, [money, inventory, cooking.isCooking, gameMode, cooking.lastResult, showDaySummary]);
+
+
+    // --- 4. Event Handlers ---
+
+    const handleSpawnItem = (item: any) => {
+        if (showDaySummary || dayTimeLeft <= 0) return;
+        if (gameMode === 'CHALLENGE') {
+            if (money < item.price) {
+                audioService.playDelete();
+                return;
+            }
+            handleTransaction(-item.price);
+        }
+        inventory.spawnItem(item);
+    };
+
+    const handleCounterItemClick = (item: any) => {
+        inventory.moveItemToStation(item, activeStation);
+    };
+
+    const handleCounterItemDelete = (item: any) => {
+        audioService.playDelete();
+        if (gameMode === 'CHALLENGE' && item.status === 'raw') {
+            handleTransaction(item.price); // Refund
+        }
+        inventory.removeItemFromCounter(item);
+    };
+
+    const handlePrepAction = (method: PrepMethod) => {
+        if (inventory.prepItems.length === 0 || dayTimeLeft <= 0) return;
+        cooking.performPrep(inventory.prepItems, method, inventory.updatePrepItems);
+    };
+
+    const handleMarinateAction = () => {
+        if (inventory.marinateItems.length === 0 || dayTimeLeft <= 0) return;
+        cooking.performMarinate(inventory.marinateItems, inventory.updateMarinateItems);
+    };
+
+    const handleStartCooking = () => {
+        if (dayTimeLeft <= 0 || cooking.isSubmitting) return;
+
+        let method: AnyCookingMethod | null = null;
+        if (activeStation === 'BAR') {
+            if (inventory.barItems.length === 0) return;
+            method = selectedMix;
+        } else {
+            if (inventory.potItems.length === 0) return;
+            method = selectedHeat === 'raw' ? null : selectedHeat;
+        }
+
+        if (method) {
+            cooking.startCookingAnimation(method);
+        }
+    };
+
+    const handleCook = async (precision: any = 'perfect') => {
+        if (cooking.isSubmitting || dayTimeLeft <= 0) return;
+
+        let itemsToProcess = activeStation === 'BAR' ? inventory.barItems : inventory.potItems;
+        let method = activeStation === 'BAR' ? selectedMix : (selectedHeat === 'raw' ? null : selectedHeat);
+
+        if (itemsToProcess.length === 0) return;
+
+        const result = await cooking.performCook(
+            itemsToProcess,
+            method,
+            customerManager.currentCustomer,
+            precision
+        );
+
+        if (result && gameMode === 'CHALLENGE' && customerManager.currentCustomer) {
+            // Economy Logic
+            let cost = itemsToProcess.reduce((sum, i) => sum + i.price, 0);
+            let multiplier = 0.5;
+            if (result.score > 30) multiplier = 0.8;
+            if (result.score > 50) multiplier = 1.0;
+            if (result.score > 70) multiplier = 1.2;
+            if (result.score > 85) multiplier = 1.5;
+            if (result.score > 95) multiplier = 2.0;
+
+            let revenue = Math.round(customerManager.currentCustomer.budget * multiplier);
+
+            // Late Penalty
+            if (customerManager.timeLeft <= 30) {
+                const penalty = Math.round(revenue * 0.2);
+                revenue -= penalty;
+                result.latePenalty = penalty;
+            }
+
+            result.cost = cost;
+            result.revenue = revenue;
+            result.profit = revenue - cost;
+
+            if (result.score >= 50) {
+                result.customerSatisfied = true;
+                handleTransaction(revenue);
+                audioService.playWin();
+            } else {
+                result.customerSatisfied = false;
+                audioService.playFailure();
+            }
+
+            // Update the result in state with financials
+            cooking.setLastResult({ ...result });
+        } else if (result) {
+            // Sandbox Audio
+            if (result.score > 70) audioService.playWin();
+            else audioService.playSuccess();
+        }
+
+        inventory.clearCookingStations();
+    };
+
+    const handleReset = () => {
+        cooking.resetResult();
+        if (gameMode === 'CHALLENGE' && customerManager.currentCustomer) {
+            customerManager.loadNewCustomer();
+        }
+    };
+
+    // --- 5. Render ---
+
+    if (!gameMode) {
+        return <StartScreen onSelectMode={setGameMode} language={language} onSetLanguage={setLanguage} theme={theme} onSetTheme={setTheme} />;
+    }
+
+    const isJapanese = theme === 'japanese';
+
+    return (
+        <div className={`h-[100dvh] flex flex-col overflow-hidden relative transition-colors duration-500
+        ${isJapanese ? 'bg-seigaiha text-stone-800' : 'bg-[#fef3c7]'}
+    `}>
+            {!isJapanese && <div className="absolute inset-0 bg-kitchen-tile opacity-30 pointer-events-none"></div>}
+
+            {/* Top Bar */}
+            <div className={`flex justify-between items-center p-2 sm:p-4 z-30 shadow-sm border-b relative
+          ${isJapanese ? 'bg-white/90 border-stone-200' : 'bg-white/80 border-stone-200 backdrop-blur-md'}
+      `}>
+                <div className="flex items-center gap-2 sm:gap-4">
+                    <button
+                        onClick={() => setGameMode(null)}
+                        className="p-2 rounded-full hover:bg-stone-100 transition-colors"
+                        title={t('backToMenu', language)}
+                    >
+                        <ArrowLeft size={20} className={isJapanese ? "text-jp-indigo" : "text-stone-600"} />
+                    </button>
+                    {gameMode === 'CHALLENGE' ? (
+                        <div className="flex items-center gap-2">
+                            <div className={`flex items-center gap-1 px-3 py-1 rounded-full border shadow-sm ${money < 20 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : (isJapanese ? 'bg-indigo-50 border-indigo-100 text-jp-indigo' : 'bg-green-50 border-green-200 text-green-700')}`}>
+                                <Wallet size={16} />
+                                <span className="font-mono font-bold">${money}</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm
+                    ${isJapanese ? 'bg-indigo-50 text-jp-indigo border-indigo-100' : 'bg-blue-50 text-blue-500 border-blue-100'}
+                 `}>
+                            {t('sandboxMode', language)}
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowManual(true)}
+                        className={`p-2 rounded-full border shadow-sm transition-all
+                    ${isJapanese ? 'bg-indigo-50 text-jp-indigo border-indigo-100 hover:bg-indigo-100' : 'bg-blue-50 text-blue-500 border-blue-200 hover:bg-blue-100'}
+                `}
+                        title={t('howToPlay', language)}
+                    >
+                        <HelpCircle size={20} />
+                    </button>
+                    <button
+                        onClick={() => setShowRecipeBook(true)}
+                        className={`p-2 rounded-full border shadow-sm transition-all
+                    ${isJapanese ? 'bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-100' : 'bg-orange-100 text-orange-500 border-orange-200 hover:bg-orange-200'}
+                `}
+                        title={t('myCookbook', language)}
+                    >
+                        <BookOpen size={20} />
+                    </button>
+                </div>
+            </div>
+
+            {gameMode === 'CHALLENGE' && (
+                <DayProgressBar day={day} timeLeft={dayTimeLeft} maxTime={DAY_LENGTH} language={language} />
+            )}
+
+            {/* Main Workspace */}
+            <div className="flex-1 relative overflow-hidden flex flex-col">
+                <WorkStation
+                    mode={activeStation}
+                    onSetMode={setActiveStation}
+
+                    prepItems={inventory.prepItems}
+                    onPrepAction={handlePrepAction}
+                    onRemovePrepItem={(item) => inventory.returnItemToCounter(item, 'PREP')}
+
+                    marinateItems={inventory.marinateItems}
+                    onRemoveMarinateItem={(item) => inventory.returnItemToCounter(item, 'MARINATE')}
+                    onMarinateAction={handleMarinateAction}
+
+                    barItems={inventory.barItems}
+                    onRemoveBarItem={(item) => inventory.returnItemToCounter(item, 'BAR')}
+                    selectedMix={selectedMix}
+                    onSelectMix={setSelectedMix}
+
+                    potItems={inventory.potItems}
+                    onRemovePotItem={(item) => inventory.returnItemToCounter(item, 'COOK')}
+                    onCook={handleCook}
+                    onStartCooking={handleStartCooking}
+                    selectedHeat={selectedHeat}
+                    onSelectHeat={setSelectedHeat}
+
+                    isCooking={cooking.isCooking}
+                    isSubmitting={cooking.isSubmitting}
+                    history={cooking.history}
+                    onShowHistory={cooking.setLastResult}
+                    currentCustomer={customerManager.currentCustomer}
+                    isLoadingCustomer={customerManager.isLoadingCustomer}
+                    activeAnimationMethod={cooking.activeAnimationMethod}
+                    language={language}
+                    gameMode={gameMode}
+                    timeLeft={customerManager.timeLeft}
+                    theme={theme}
+                />
+            </div>
+
+            {/* Counter */}
+            <div className="h-24 xs:h-28 sm:h-32 md:h-40 relative z-20">
+                <KitchenCounter
+                    items={inventory.counterItems}
+                    onItemClick={handleCounterItemClick}
+                    onItemDelete={handleCounterItemDelete}
+                    activeStationLabel={t(activeStation === 'PREP' ? 'prepStation' : activeStation === 'MARINATE' ? 'marinateStation' : activeStation === 'BAR' ? 'barStation' : 'cookingStation', language)}
+                    language={language}
+                    theme={theme}
+                />
+            </div>
+
+            {/* Slide-out Pantry */}
+            <div className={`pantry-sidebar fixed inset-y-0 left-0 w-[85vw] xs:w-80 sm:w-96 max-w-[320px] sm:max-w-none shadow-2xl transform transition-transform duration-300 z-40 flex flex-col border-r-2 sm:border-r-4 border-[#c7a677]
+          ${isPantryOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+                <div className="flex items-center justify-between p-2.5 sm:p-4 bg-[#e8d5b5] border-b border-[#c7a677]">
+                    <h2 className={`text-base sm:text-xl font-bold text-[#8c6b4a] ${isJapanese ? '' : 'font-display'}`}>{t('pantry', language)}</h2>
+                    <button onClick={() => setIsPantryOpen(false)} className="p-1.5 sm:p-2 bg-[#d4c09d] rounded-full text-[#8c6b4a] hover:bg-[#c7a677] transition-colors">
+                        <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-hidden bg-[#f3e6d3]">
+                    <Pantry
+                        onSpawnItem={handleSpawnItem}
+                        language={language}
+                        gameMode={gameMode || 'SANDBOX'}
+                        money={money}
+                        theme={theme}
+                    />
+                </div>
+            </div>
+
+            {!isPantryOpen && (
+                <button
+                    onClick={() => setIsPantryOpen(true)}
+                    className={`fixed left-2 xs:left-3 sm:left-4 bottom-28 xs:bottom-32 sm:bottom-36 md:bottom-44 z-30 p-2.5 xs:p-3 sm:p-4 rounded-full shadow-xl border-2 sm:border-4 transition-all hover:scale-110 active:scale-95 flex items-center gap-1 sm:gap-2 group
+                ${isJapanese
+                            ? 'bg-jp-800 text-white border-stone-600'
+                            : 'bg-gradient-to-br from-chef-500 to-chef-600 text-white border-white'}
+            `}
+                >
+                    <span className="text-lg xs:text-xl sm:text-2xl group-hover:rotate-12 transition-transform">🥬</span>
+                    <span className="font-bold text-[10px] sm:text-xs uppercase tracking-wider hidden sm:inline">{t('pantry', language)}</span>
+                </button>
+            )}
+
+            {/* Modals */}
+            <ResultModal
+                result={cooking.lastResult}
+                onClose={() => {
+                    if (isViewingHistory) {
+                        cooking.setLastResult(null);
+                        setIsViewingHistory(false);
+                    } else {
+                        handleReset();
+                    }
+                }}
+                onReset={handleReset}
+                customer={customerManager.currentCustomer}
+                language={language}
+                isHistoryView={isViewingHistory}
+            />
+
+            <RecipeBook
+                isOpen={showRecipeBook}
+                onClose={() => setShowRecipeBook(false)}
+                history={cooking.history}
+                onSelectDish={(dish) => {
+                    setIsViewingHistory(true);
+                    cooking.setLastResult({ ...dish });
+                }}
+                language={language}
+            />
+
+            <PlayerManual
+                isOpen={showManual}
+                onClose={() => setShowManual(false)}
+                language={language}
+            />
+
+            {showDaySummary && (
+                <DaySummaryModal
+                    day={day}
+                    dailyRevenue={dailyRevenue}
+                    rentCost={RENT_COST}
+                    currentBalance={money}
+                    onNextDay={startNextDay}
+                    onGameOver={() => {
+                        setShowDaySummary(false);
+                        setShowGameOver(true);
+                    }}
+                    language={language}
+                />
+            )}
+
+            {showGameOver && (
+                <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center text-white p-8 animate-fadeIn text-center">
+                    <div className="text-6xl mb-4 animate-bounce">💸</div>
+                    <h1 className="text-4xl font-black mb-2 text-red-500 uppercase tracking-widest">{t('bankrupt', language)}</h1>
+                    <p className="text-stone-400 mb-8 max-w-md">{t('bankruptDesc', language)}</p>
+                    <button
+                        onClick={() => setGameMode(null)}
+                        className="px-8 py-3 bg-white text-black font-bold rounded-full hover:scale-105 transition-transform"
+                    >
+                        {t('backToMenu', language)}
+                    </button>
+                </div>
+            )}
+
+        </div>
+    );
+};
+
+export default App;
