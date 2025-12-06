@@ -166,7 +166,7 @@ export const MAX_PROCESS_STEPS = 5;
 // ===== 游戏模式 =====
 export type GameMode = 'SANDBOX' | 'CHALLENGE';
 // 评审风格
-export type JudgePersona = 'standard' | 'gordon' | 'grandma' | 'scifi' | 'cat';
+export type JudgePersona = 'standard' | 'gordon' | 'grandma' | 'scifi' | 'cat' | 'jk' | 'tieba' | 'loli' | 'girlfriend';
 
 export type CookingPrecision = 'undercooked' | 'perfect' | 'burnt';
 
@@ -205,6 +205,8 @@ export interface DishResult {
   customerSatisfied?: boolean;
   customerName?: string;
   customerEmoji?: string;
+  judgePersonaId?: string; // ID of the judge who critiqued this dish
+  imageId?: string; // IndexedDB ID for persistent image storage
   ingredients?: DishIngredient[];
 
   // Financials

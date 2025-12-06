@@ -341,3 +341,4 @@ export const translateStatus = (status: string, lang: Language): string => {
   }
   return status;
 };
+export const getStatusLabel = translateStatus;

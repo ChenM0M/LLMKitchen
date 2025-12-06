@@ -314,8 +314,10 @@ const App: React.FC = () => {
             else audioService.playSuccess();
         }
 
-        // 清空出盘台
-        inventory.clearSubmitStation();
+        if (result) {
+            // 清空出盘台 - 只有成功时才清空，失败时保留（相当于退还）
+            inventory.clearSubmitStation();
+        }
     };
 
     const handleReset = () => {

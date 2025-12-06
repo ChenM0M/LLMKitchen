@@ -4,22 +4,29 @@ import React, { useRef, useState } from 'react';
 import { DishResult, Customer, Language } from '../types';
 import { X, RotateCcw, BookOpenCheck, DollarSign, Download, Share2 } from 'lucide-react';
 import { t } from '../translations';
+import { JUDGE_PERSONAS } from '../constants';
+import { apiSettings } from '../services/apiSettings';
 import html2canvas from 'html2canvas';
 import toast from 'react-hot-toast';
+
+import { ExportCard } from './ExportCard';
 
 interface ResultModalProps {
     result: DishResult | null;
     onClose: () => void;
-    onReset: () => void;
-    customer: Customer | null;
-    isHistoryView?: boolean;
+    onReset: () => void; // This prop is still present in the original code, but the diff implies it might be removed. Keeping it as per "without making any unrelated edits"
+    customer: Customer | null; // This prop is still present in the original code, but the diff implies it might be removed. Keeping it as per "without making any unrelated edits"
+    isHistoryView?: boolean; // This prop is still present in the original code, but the diff implies it might be removed. Keeping it as per "without making any unrelated edits"
     language: Language;
-    isSaved?: boolean;
-    onToggleSave?: () => void;
+    isSaved?: boolean; // This prop is still present in the original code, but the diff implies it might be removed. Keeping it as per "without making any unrelated edits"
+    onToggleSave?: () => void; // This prop is still present in the original code, but the diff implies it might be removed. Keeping it as per "without making any unrelated edits"
+    isOpen: boolean; // Added as per diff
+    onRetry?: () => void; // Added as per diff (implied by usage in component signature)
 }
 
 export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onReset, customer, isHistoryView = false, language, isSaved, onToggleSave }) => {
     const cardRef = useRef<HTMLDivElement>(null);
+    const exportCardRef = useRef<HTMLDivElement>(null);
     const [isSharing, setIsSharing] = useState(false);
     const [imageLoadFailed, setImageLoadFailed] = useState(false);
 
@@ -48,44 +55,103 @@ export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onRes
     };
 
     const handleShare = async () => {
-        if (!cardRef.current || isSharing) return;
+        if (!exportCardRef.current || isSharing) return;
 
         setIsSharing(true);
-        const toastId = toast.loading(language === 'zh' ? '正在生成卡片...' : 'Generating card...');
+        const toastId = toast.loading(language === 'zh' ? '正在生成精美卡片...' : 'Generating premium card...');
+
+        // Get the hidden container that wraps ExportCard
+        const hiddenContainer = exportCardRef.current.parentElement;
 
         try {
-            // 等待图片加载完成（如果有）
-            const images = cardRef.current.getElementsByTagName('img');
+            // STEP 1: Keep the card off-screen but with full dimensions (no visible flash)
+            // We don't move it to visible anymore to avoid the flash
+            const originalStyles = hiddenContainer?.getAttribute('style') || '';
+
+            // Ensure it has dimensions but stays off-screen
+            if (hiddenContainer) {
+                hiddenContainer.setAttribute('style', `
+                    position: fixed;
+                    left: -500px;
+                    top: 0;
+                    z-index: -1;
+                    opacity: 1;
+                    pointer-events: none;
+                    width: 450px;
+                    height: 780px;
+                    overflow: visible;
+                    background: white;
+                `);
+            }
+
+            // STEP 2: Wait for images inside ExportCard to fully load
+            const images = exportCardRef.current.getElementsByTagName('img');
             await Promise.all(Array.from(images).map((imgEl) => {
                 const img = imgEl as HTMLImageElement;
-                if (img.complete) return Promise.resolve();
+                if (img.complete && img.naturalWidth > 0) return Promise.resolve();
                 return new Promise((resolve) => {
                     img.onload = resolve;
-                    img.onerror = resolve;
+                    img.onerror = () => {
+                        // If image fails to load, set a placeholder
+                        img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>';
+                        resolve(undefined);
+                    };
+                    setTimeout(resolve, 3000); // 3s timeout
                 });
             }));
 
-            const canvas = await html2canvas(cardRef.current, {
+            // Add delay to ensure paint
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // STEP 3: Capture using html2canvas with ignoreElements for problematic images
+            const canvas = await html2canvas(exportCardRef.current, {
                 useCORS: true,
-                allowTaint: true, // 允许跨域图片
-                scale: 2, // 高清
-                backgroundColor: '#ffffff', // 强制白底，避免透明
-                logging: false,
-                // 排除忽略的元素
-                ignoreElements: (element) => element.hasAttribute('data-html2canvas-ignore')
+                allowTaint: true,
+                scale: 2,
+                backgroundColor: '#ffffff',
+                logging: true, // Enable logging to debug
+                imageTimeout: 5000, // Wait up to 5s for images
+                onclone: (doc) => {
+                    // Force all images in the cloned document to have dimensions
+                    const clonedImages = doc.getElementsByTagName('img');
+                    Array.from(clonedImages).forEach(img => {
+                        if (!img.naturalWidth || img.naturalWidth === 0) {
+                            // Replace broken images with a colored div
+                            const placeholder = doc.createElement('div');
+                            placeholder.style.cssText = `
+                                width: 100%;
+                                height: 100%;
+                                background: linear-gradient(135deg, #f5f5f5, #e0e0e0);
+                            `;
+                            img.parentNode?.replaceChild(placeholder, img);
+                        }
+                    });
+                }
             });
 
+            // STEP 4: Restore hidden state
+            if (hiddenContainer) {
+                hiddenContainer.setAttribute('style', originalStyles);
+            }
+
             const link = document.createElement('a');
-            link.download = `CookingGenius-${result.dishName}-${Date.now()}.png`;
+            link.download = `CookingGenius-Premium-${result.dishName}-${Date.now()}.png`;
             link.href = canvas.toDataURL('image/png');
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
 
-            toast.success(language === 'zh' ? '卡片已保存！' : 'Card saved!', { id: toastId });
+            toast.success(language === 'zh' ? '精美卡片已保存！' : 'Premium card saved!', { id: toastId });
         } catch (error) {
             console.error('Share failed:', error);
-            toast.error(language === 'zh' ? '生成失败' : 'Failed to generate', { id: toastId });
+            // Restore even on error
+            if (hiddenContainer) {
+                hiddenContainer.setAttribute('style', `
+                    position: fixed; left: 200vw; top: 0; opacity: 1; z-index: -9999;
+                    pointer-events: none; width: 450px; height: 780px; overflow: hidden; background: white;
+                `);
+            }
+            toast.error(language === 'zh' ? '生成失败，请重试' : 'Failed, please try again', { id: toastId });
         } finally {
             setIsSharing(false);
         }
@@ -97,6 +163,26 @@ export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onRes
                 className="absolute inset-0 bg-stone-900/60 backdrop-blur-sm transition-opacity"
                 onClick={onClose}
             ></div>
+
+            {/* Hidden Export Card - Rendered OFF-SCREEN but with physical dimensions (Safe Strategy) */}
+            <div style={{
+                position: 'fixed',
+                left: '200vw', // Far off-screen right
+                top: '0',
+                opacity: 1, // Keep opacity 1 to ensure rendering, but it's off-screen
+                zIndex: -9999,
+                pointerEvents: 'none',
+                width: '450px',
+                height: '780px',
+                overflow: 'hidden',
+                background: 'white' // Ensure background exists
+            }} aria-hidden="true">
+                <ExportCard
+                    ref={exportCardRef}
+                    result={result}
+                    language={language}
+                />
+            </div>
 
             <div
                 ref={cardRef}
@@ -283,12 +369,15 @@ export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onRes
                         </div>
                     )}
 
-                    {/* Chef Comment */}
-                    <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 relative mt-4">
-                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-white px-3 py-0.5 rounded-full border border-amber-100 shadow-sm flex items-center gap-1">
-                            <span className="text-xs font-bold text-amber-600">{t('chefSays', language)}</span>
+                    {/* Chef Comment with Persona Display */}
+                    <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex flex-col gap-2 relative">
+                        <div className="absolute -top-3 left-4 bg-white px-2 py-0.5 rounded-full border border-amber-100 shadow-sm flex items-center gap-1.5">
+                            <span className="text-base">{JUDGE_PERSONAS[result.judgePersonaId as keyof typeof JUDGE_PERSONAS]?.emoji || '👨‍🍳'}</span>
+                            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">
+                                {JUDGE_PERSONAS[result.judgePersonaId as keyof typeof JUDGE_PERSONAS]?.name[language] || (language === 'zh' ? '主厨点评' : "CHEF'S VERDICT")}
+                            </span>
                         </div>
-                        <p className="text-amber-900 italic text-sm mt-1">
+                        <p className="text-sm font-serif italic text-amber-900/80 leading-relaxed pt-2">
                             "{result.chefComment}"
                         </p>
                     </div>

@@ -14,7 +14,9 @@ const buildImagePrompt = (
   method: AnyCookingMethod | null,
   precision: CookingPrecision | undefined,
   isBartending: boolean,
-  score: number
+  score: number,
+  customer: Customer | null,
+  judgePersona: JudgePersona
 ): string => {
   // Count ingredients and group by type with full details
   const ingredientCounts = new Map<string, { count: number; statuses: string[]; merged: boolean }>();
@@ -142,28 +144,26 @@ const buildImagePrompt = (
 
   const container = isBartending
     ? 'cocktail glass on bar counter, dark background'
-    : 'white ceramic plate on wooden table, neutral background';
+    : 'white ceramic plate';
 
-  return `Minimalist food photo on ${container}. NO TEXT.
+  // Kolors / SDXL Optimized Prompt
+  // Rich visual descriptors, focus on lighting and texture
+  const prompt = `(masterpiece, best quality, photorealistic:1.4), 8k uhd, dslr, soft cinematic lighting, 35mm lens, f/1.8, high fidelity, 
+Subject: The dish described below.
+Customer Context: ${customer ? `${customer.request} style` : 'Classic'}
+Judge Style: ${JUDGE_PERSONAS[judgePersona].name.en} perspective
+Ingredients: ${ingredientDesc}
 
-THE DISH CONTAINS EXACTLY THESE ${totalCount} ITEMS (nothing else):
-${ingredientDesc}
-
-VISUAL EFFECTS:
-- Cooking: ${cookingVisual}
-${precisionVisual ? `- Result: ${precisionVisual}\n` : ''}- Preparation: ${statusEffects.length > 0 ? statusEffects.join(', ') : 'natural state'}
-- Plating: ${plating}
-
-CAMERA: 45° overhead, close-up, blurred background
+Cooking: ${method || 'Mixed'}, ${precisionVisual}, Plating: ${plating}
 
 ABSOLUTE RESTRICTIONS:
+- THE IMAGE MUST CONTAIN EXACTLY ${totalCount} FOOD ITEMS. NO MORE, NO LESS.
 - ONLY show the ${totalCount} ingredients listed above
-- NO vegetables, herbs, garnishes unless listed
-- NO background ingredients or decorations
-- NO onions, garlic, peppers unless explicitly listed
-- NO text, watermarks, labels
-- Clean simple composition
-- Only the exact ingredients, nothing added`;
+- DO NOT add raw garnishes (parsley, mint) unless listed
+- NO text, no watermark, no labels
+- Clean background, center composition
+- Food photography style, appetizing, delicious`.trim();
+  return prompt;
 };
 
 
@@ -461,12 +461,37 @@ async function callImageAPI(prompt: string): Promise<string | null> {
         console.log('[IMAGE API] Using complete endpoint:', url);
       } else {
         // Standard OpenAI format - need to add path
-        if (!baseEndpoint.endsWith('/v1') && !baseEndpoint.includes('/v1/')) {
-          baseEndpoint = `${baseEndpoint}/v1`;
+        // 避免重复添加 /v1
+        if (baseEndpoint.endsWith('/v1')) {
+          url = `${baseEndpoint}/images/generations`;
+        } else if (baseEndpoint.includes('/v1/')) {
+          // 已包含 /v1/ 路径
+          url = baseEndpoint.endsWith('/')
+            ? `${baseEndpoint}images/generations`
+            : `${baseEndpoint}/images/generations`;
+        } else {
+          url = `${baseEndpoint}/v1/images/generations`;
         }
-        url = `${baseEndpoint}/images/generations`;
         console.log('[IMAGE API] Calling OpenAI format:', url);
       }
+
+      // 构建请求体 - gpt-image-1/4 使用 quality 参数
+      const isGptImage = settings.imageModel.toLowerCase().includes('gpt-image');
+      const requestBody: Record<string, unknown> = {
+        model: settings.imageModel,
+        prompt,
+        n: 1,
+        size: '1024x1024'
+      };
+
+      // gpt-image 模型使用 quality 参数，其他模型使用 response_format
+      if (isGptImage) {
+        requestBody.quality = 'medium';
+      } else {
+        requestBody.response_format = 'b64_json';
+      }
+
+      console.log('[IMAGE API] Request body:', JSON.stringify(requestBody).substring(0, 200));
 
       const response = await fetch(url, {
         method: 'POST',
@@ -474,13 +499,7 @@ async function callImageAPI(prompt: string): Promise<string | null> {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${imageKey}`
         },
-        body: JSON.stringify({
-          model: settings.imageModel,
-          prompt,
-          n: 1,
-          size: '1024x1024',
-          response_format: 'b64_json'
-        })
+        body: JSON.stringify(requestBody)
       });
 
       console.log('[IMAGE API] Response status:', response.status);
@@ -771,6 +790,8 @@ export const cookDish = async (
   const judgeConfig = JUDGE_PERSONAS[judgePersona] || JUDGE_PERSONAS.standard;
   const personaInstruction = judgeConfig.promptInstruction[lang === 'zh' ? 'zh' : 'en'];
 
+  const judgeScoringRule = judgeConfig.scoringRule?.[lang === 'zh' ? 'zh' : 'en'] || (isZh ? '评分标准：客观公正' : 'Scoring: Objective');
+
   const textPrompt = `${personaInstruction}
 ${isBartending ? (lang === 'zh' ? '你正在评价一杯饮品。' : 'You are critiquing a drink.') : ''}
 
@@ -785,13 +806,15 @@ ${customer ? `【顾客信息】
 - 顾客: ${customer.name} (${customer.trait})
 - 点餐: "${customer.request}"` : '【自由烹饪模式】'}
 
-【严格评分标准】(请认真遵守)
-- 0-20分：完全失败 (食材搭配荒谬、做法严重错误、无法食用)
-- 21-40分：差评 (搭配不合理、烹饪方法不当、味道糟糕)
-- 41-55分：勉强及格 (一般般，没什么亮点)
-- 56-70分：良好 (搭配合理，烹饪得当)
-- 71-85分：优秀 (搭配巧妙，烹饪完美，有创意)
-- 86-100分：大师级 (极罕见，只有顶级搭配+完美烹饪才配得上)
+【你的评分标准】(请严格执行你的人设！)
+${judgeScoringRule}
+
+【通用评分参考】
+- 0-20分：无法下咽
+- 21-40分：难吃
+- 41-60分：普通
+- 61-80分：美味
+- 81-100分：极品
 
 【扣分项】(每项扣5-15分)
 - 食材搭配不合理 (如：巧克力配鱼)
@@ -808,16 +831,29 @@ ${customer ? `【顾客信息】
 
 【重要约束 - 必须严格遵守】
 - 【!!!禁止幻觉!!!】你只能描述【食材清单】中列出的食材，禁止提及任何其他食材
+- 【!!!禁止编造步骤!!!】你只能描述这一步实际发生的处理。如果食材状态是"raw"(生)，绝对不能描述为"切片"、"切丝"、"烹饪"或"煎烤"。
+- 如果用户没有进行切割操作，不要夸奖刀工！！
 - 如果清单中只有"鸡蛋、五花肉"，描述中绝对不能出现"黄瓜"或任何其他食材
 - 菜名必须根据实际食材命名，不能含有未使用的食材名称
-- 描述必须提及所有处理步骤
+- 描述必须严格基于实际发生的处理步骤
 - 如果食材搭配很糟糕，给低分不要客气
 - 评价要诚实，不要无脑夸
+- 【关键】语言表达要多样化！不要使用模板式的句子。根据评审的人设，使用他们独特的口癖和词汇。即使是同一个评审，每次评价也应该有不同的句式和侧重点。榨干模型的创造力！
 
 ${isZh ? '用简体中文输出。' : 'Output in English.'}
-再次强调：只能使用以下食材: ${items.map(i => isZh ? (i.nameZh || i.name) : i.name).join('、')}
+再次强调：只能使用以下食材: ${items.map(i => isZh ? (i.nameZh || i.name) : i.name).join('、')}，且必须基于真实处理状态。
 
-只返回JSON: {"dishName": "根据实际使用食材起的名字", "description": "只描述实际使用的食材", "emoji": "🍽️", "score": 50, "chefComment": "诚实的厨师点评", "customerFeedback": "顾客反馈", "customerSatisfied": false, "colorHex": "#abc123"}`;
+【输出格式说明】
+- dishName: 根据食材起的菜名
+- description: 客观描述这道菜（外观、质地、色泽、香气等），60-90字左右，细节要丰富
+- chefComment: 你作为评审的主观点评（体现人设风格，毒舌或夸赞），70-120字左右，要言之有物，情感充沛
+- score: 根据评分标准给出的分数，不同人设打分风格可以略有不同
+- customerFeedback: 顾客的反馈（如果有顾客）
+- colorHex: 代表这道菜的主色调
+
+【重要】description和chefComment必须是完全不同的内容！description是客观描述，chefComment是主观评价。
+
+只返回JSON: {"dishName": "菜名", "description": "客观描述菜品的制作和外观", "emoji": "🍽️", "score": 50, "chefComment": "你的主观点评，体现评审人设", "customerFeedback": "顾客反馈", "customerSatisfied": false, "colorHex": "#abc123"}`;
 
   try {
     const textResponse = await callTextAPI(textPrompt);
@@ -832,9 +868,10 @@ ${isZh ? '用简体中文输出。' : 'Output in English.'}
     const resultJson = JSON.parse(jsonMatch[0]) as DishResult;
 
     // Image Generation - use new detailed prompt builder
-    const imagePrompt = buildImagePrompt(items, method, precision, isBartending, resultJson.score);
+    const imagePrompt = buildImagePrompt(items, method, precision, isBartending, resultJson.score, customer, judgePersona);
 
     let imageUrl = await callImageAPI(imagePrompt);
+    let imageId: string | undefined = undefined;
 
     // 如果图片是 URL（非 base64），立即转换为 Base64 以确保持久化
     if (imageUrl && !imageUrl.startsWith('data:')) {
@@ -863,27 +900,35 @@ ${isZh ? '用简体中文输出。' : 'Output in English.'}
       }
     }
 
+    // Save image to IndexedDB for persistence (bypasses localStorage limit)
+    if (imageUrl && imageUrl.startsWith('data:')) {
+      try {
+        const { saveImage, generateImageId } = await import('./imageStorage');
+        imageId = generateImageId(resultJson.dishName, Date.now());
+        await saveImage(imageId, imageUrl);
+        console.log('[IMAGE] ✅ Saved to IndexedDB with ID:', imageId);
+      } catch (e) {
+        console.warn('[IMAGE] ⚠️ Failed to save to IndexedDB:', e);
+      }
+    }
+
     return {
       ...resultJson,
       imageUrl: imageUrl || undefined,
+      imageId: imageId, // Store the IndexedDB ID for reliable retrieval
       customerName: customer?.name,
       customerEmoji: customer?.emoji,
       ingredients: ingredientList,
-      cookingPrecision: precision
+      cookingPrecision: precision,
+      customerFeedback: (resultJson.customerFeedback || '').substring(0, 100),
+      customerSatisfied: resultJson.customerSatisfied,
+      colorHex: resultJson.colorHex || '#fbbf24',
+      judgePersonaId: judgePersona // Include the ID of the judge used
     };
 
   } catch (error) {
     console.error("[API] Cooking failed:", error);
-    return {
-      dishName: isZh ? "厨房错误" : "Kitchen Error",
-      description: isZh ? "API 调用失败，请检查 API 设置。" : "API call failed. Check API settings.",
-      emoji: "💥",
-      score: 0,
-      chefComment: String(error),
-      colorHex: "#57534e",
-      customerFeedback: "...",
-      customerSatisfied: false,
-      ingredients: []
-    };
+    throw error; // Rethrow to allow caller to handle refund
   }
 };
+

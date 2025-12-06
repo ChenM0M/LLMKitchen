@@ -298,9 +298,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
 
         </div>
 
-        <p className="mt-12 text-stone-400 text-sm font-medium">
-          {t('poweredBy', language)}
-        </p>
+
 
       </div>
     </div>

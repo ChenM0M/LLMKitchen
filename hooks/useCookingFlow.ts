@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { DishResult, AnyCookingMethod, KitchenItem, Customer, CookingPrecision, PrepMethod, MarinateMethod, MixMethod, HeatMethod, Language, mergeItems, QTERating, JudgePersona } from '../types';
 import { cookDish } from '../services/geminiService';
 import { audioService } from '../services/audioService';
+import { toast } from 'react-hot-toast';
 import { urlToBase64 } from '../utils/imageUtils';
 
 export const useCookingFlow = (language: Language) => {
@@ -23,25 +24,19 @@ export const useCookingFlow = (language: Language) => {
     });
 
     // Save History - 只在历史真正改变时保存
+    // 图片现在存储在 IndexedDB 中 (via imageId)，不再存储 imageUrl 到 localStorage
     useEffect(() => {
         if (history.length > 0 || localStorage.getItem('ai-pocket-kitchen-history') === null) {
             try {
+                // Strip imageUrl from history - images are now in IndexedDB via imageId
                 const historyToSave = history.slice(0, 30).map(dish => {
-                    // 如果是 data URL (base64)，保留图片；否则移除
-                    const imageUrl = dish.imageUrl?.startsWith('data:') ? dish.imageUrl : undefined;
-                    return { ...dish, imageUrl };
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                    const { imageUrl, ...rest } = dish;
+                    return rest; // Keep imageId, remove imageUrl
                 });
                 localStorage.setItem('ai-pocket-kitchen-history', JSON.stringify(historyToSave));
             } catch (e) {
-                // 如果存储失败（可能是配额超出），尝试不保存图片
-                try {
-                    const historyWithoutImages = history.slice(0, 30).map(dish => {
-                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                        const { imageUrl, ...rest } = dish;
-                        return rest;
-                    });
-                    localStorage.setItem('ai-pocket-kitchen-history', JSON.stringify(historyWithoutImages));
-                } catch (e2) { }
+                console.error('Failed to save history:', e);
             }
         }
     }, [history]);
@@ -59,22 +54,19 @@ export const useCookingFlow = (language: Language) => {
     });
 
     // Save Cookbook - 只在 savedRecipes 真正改变时保存
+    // 图片现在存储在 IndexedDB 中 (via imageId)
     useEffect(() => {
-        // 避免初始化时的空数组覆盖已保存数据
         if (savedRecipes.length > 0 || localStorage.getItem('ai-pocket-kitchen-cookbook') === null) {
             try {
-                // 保存所有图片，依靠加载失败时的回退机制处理失效链接
-                localStorage.setItem('ai-pocket-kitchen-cookbook', JSON.stringify(savedRecipes));
+                // Strip imageUrl - images are in IndexedDB via imageId
+                const recipesToSave = savedRecipes.map(dish => {
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                    const { imageUrl, ...rest } = dish;
+                    return rest;
+                });
+                localStorage.setItem('ai-pocket-kitchen-cookbook', JSON.stringify(recipesToSave));
             } catch (e) {
-                // 存储失败（只有配额满时）才不保存图片
-                try {
-                    const recipesWithoutImages = savedRecipes.map(dish => {
-                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                        const { imageUrl, ...rest } = dish;
-                        return rest;
-                    });
-                    localStorage.setItem('ai-pocket-kitchen-cookbook', JSON.stringify(recipesWithoutImages));
-                } catch (e2) { }
+                console.error('Failed to save cookbook:', e);
             }
         }
     }, [savedRecipes]);
@@ -297,6 +289,7 @@ export const useCookingFlow = (language: Language) => {
         } catch (e) {
             console.error(e);
             audioService.stopCookingSound();
+            toast.error(language === 'zh' ? 'API 请求失败，食材已退回' : 'Cooking failed, items refunded');
             return null;
         } finally {
             setIsSubmitting(false);

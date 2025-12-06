@@ -156,13 +156,16 @@ export const RecipeBook: React.FC<RecipeBookProps> = ({ isOpen, onClose, history
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4">
                             {displayList.map((dish, index) => (
-                                <button
+                                <div
                                     key={index}
                                     onClick={() => {
                                         onSelectDish(dish);
                                         onClose();
                                     }}
-                                    className="bg-white p-3 rounded-2xl border-2 border-stone-100 shadow-sm hover:shadow-lg hover:border-chef-300 transition-all flex items-start gap-4 text-left group hover:-translate-y-1 relative"
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { onSelectDish(dish); onClose(); } }}
+                                    className="bg-white p-3 rounded-2xl border-2 border-stone-100 shadow-sm hover:shadow-lg hover:border-chef-300 transition-all flex items-start gap-4 text-left group hover:-translate-y-1 relative cursor-pointer"
                                 >
                                     {/* Saved Indicator */}
                                     {activeTab === 'history' && savedRecipes.some(r => r.dishName === dish.dishName && r.description === dish.description) && (
@@ -252,7 +255,7 @@ export const RecipeBook: React.FC<RecipeBookProps> = ({ isOpen, onClose, history
                                             </div>
                                         )}
                                     </div>
-                                </button>
+                                </div>
                             ))}
                         </div>
                     )}

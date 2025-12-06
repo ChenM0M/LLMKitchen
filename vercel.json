@@ -1,0 +1,16 @@
+{
+    "rewrites": [
+        {
+            "source": "/api/elysiver/:path*",
+            "destination": "https://elysiver.h-e.top/:path*"
+        },
+        {
+            "source": "/api/newapi/:path*",
+            "destination": "https://newapi.netlib.re/:path*"
+        },
+        {
+            "source": "/api/siliconflow/:path*",
+            "destination": "https://api.siliconflow.cn/:path*"
+        }
+    ]
+}
