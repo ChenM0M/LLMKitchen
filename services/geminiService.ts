@@ -313,9 +313,33 @@ async function callImageAPI(prompt: string): Promise<string | null> {
   // Use text API key if image key not set separately
   const imageKey = settings.imageApiKey || settings.textApiKey;
 
+  // 如果用户没有配置 API Key，使用后端代理 (Serverless Function)
   if (!imageKey) {
-    console.error('[IMAGE API] ❌ No API key configured for image generation!');
-    return null;
+    console.log('[IMAGE API] No user config, using serverless function /api/image');
+    try {
+      const response = await fetch('/api/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[IMAGE API] Serverless error:', errorData);
+        return null;
+      }
+
+      const data = await response.json();
+      const b64 = data.data?.[0]?.b64_json;
+      const mimeType = data.data?.[0]?.mimeType || 'image/png';
+      if (b64) {
+        return `data:${mimeType};base64,${b64}`;
+      }
+      return null;
+    } catch (e) {
+      console.error('[IMAGE API] Serverless function error:', e);
+      return null;
+    }
   }
 
   // Determine API format based on endpoint and model name
