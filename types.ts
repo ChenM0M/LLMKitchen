@@ -195,12 +195,14 @@ export interface DishIngredient {
 
 export interface DishResult {
   dishName: string;
+  customName?: string;  // 用户自定义菜名
   description: string;
   emoji: string;
   score: number;
   chefComment: string;
   colorHex: string;
   imageUrl?: string;
+  imagePrompt?: string;  // 图片生成提示词
   customerFeedback?: string;
   customerSatisfied?: boolean;
   customerName?: string;

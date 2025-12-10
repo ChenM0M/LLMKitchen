@@ -149,6 +149,19 @@ export const TRANSLATIONS = {
     event_rainy: 'Rainy Day: Fewer customers, more patience',
     event_critic: 'Food Critic: VIP visit likely',
     event_promo: 'Promo: Ingredient prices -30%',
+    // 新功能
+    editDishName: 'Edit Name',
+    saveDishName: 'Save',
+    copyPrompt: 'Copy Prompt',
+    promptCopied: 'Prompt copied!',
+    addCustomIngredient: 'Add Custom',
+    myIngredients: 'My Ingredients',
+    ingredientName: 'Name',
+    ingredientEmoji: 'Emoji',
+    ingredientCategory: 'Category',
+    ingredientPrice: 'Price',
+    addIngredient: 'Add Ingredient',
+    cancel: 'Cancel',
   },
   zh: {
     pantry: '食材库',
@@ -296,6 +309,19 @@ export const TRANSLATIONS = {
     event_rainy: '阴雨绵绵：顾客减少，耐心增加',
     event_critic: '美食评论家：可能有贵宾光临',
     event_promo: '促销活动：食材价格 -30%',
+    // 新功能
+    editDishName: '编辑名称',
+    saveDishName: '保存',
+    copyPrompt: '复制提示词',
+    promptCopied: '提示词已复制！',
+    addCustomIngredient: '添加自定义',
+    myIngredients: '我的食材',
+    ingredientName: '名称',
+    ingredientEmoji: '图标',
+    ingredientCategory: '分类',
+    ingredientPrice: '价格',
+    addIngredient: '添加食材',
+    cancel: '取消',
   }
 };
 

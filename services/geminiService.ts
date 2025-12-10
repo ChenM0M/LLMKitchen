@@ -969,6 +969,7 @@ ${isZh ? '用简体中文输出。' : 'Output in English.'}
     return {
       ...resultJson,
       imageUrl: imageUrl || undefined,
+      imagePrompt: imagePrompt, // 保存图片生成提示词
       imageId: imageId, // Store the IndexedDB ID for reliable retrieval
       customerName: customer?.name,
       customerEmoji: customer?.emoji,

@@ -8,8 +8,8 @@ import { JUDGE_PERSONAS } from '../constants';
 import { apiSettings } from '../services/apiSettings';
 import html2canvas from 'html2canvas';
 import toast from 'react-hot-toast';
-
 import { ExportCard } from './ExportCard';
+import { Pencil, Check, Copy } from 'lucide-react';
 
 interface ResultModalProps {
     result: DishResult | null;
@@ -24,13 +24,40 @@ interface ResultModalProps {
     onRetry?: () => void; // Added as per diff (implied by usage in component signature)
 }
 
+// 为旧菜品生成备用提示词（用于复制功能）
+const generateFallbackPrompt = (result: DishResult, language: Language): string => {
+    const ingredientDesc = result.ingredients?.map(ing => {
+        const statusStr = ing.statuses?.filter(s => s !== 'raw').join(' ') || '';
+        return statusStr ? `${statusStr.toUpperCase()} ${ing.name}` : ing.name;
+    }).join('; ') || result.dishName;
+
+    const prompt = `(masterpiece, best quality, photorealistic:1.4), 8k uhd, dslr, soft cinematic lighting, 35mm lens, f/1.8, high fidelity,
+Subject: ${result.dishName}
+${result.description ? `Description: ${result.description}` : ''}
+Ingredients: ${ingredientDesc}
+Cooking precision: ${result.cookingPrecision || 'perfect'}
+Score: ${result.score}/100
+
+RESTRICTIONS:
+- NO text, no watermark, no labels
+- Clean background, center composition
+- Food photography style, appetizing, delicious`.trim();
+
+    return prompt;
+};
+
 export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onReset, customer, isHistoryView = false, language, isSaved, onToggleSave }) => {
     const cardRef = useRef<HTMLDivElement>(null);
     const exportCardRef = useRef<HTMLDivElement>(null);
     const [isSharing, setIsSharing] = useState(false);
     const [imageLoadFailed, setImageLoadFailed] = useState(false);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editedName, setEditedName] = useState('');
 
     if (!result) return null;
+
+    // 获取显示名称（优先使用自定义名称）
+    const displayDishName = result.customName || result.dishName;
 
     const isHighScoring = result.score >= 80;
     const isLowScoring = result.score <= 30;
@@ -252,6 +279,23 @@ export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onRes
                     >
                         {isSharing ? <div className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin" /> : <Download size={20} />}
                     </button>
+
+                    {/* Copy Prompt Button - 有提示词或有图片时显示 */}
+                    {(result.imagePrompt || result.imageUrl) && (
+                        <button
+                            onClick={() => {
+                                // 优先使用保存的提示词，否则生成备用提示词
+                                const promptToCopy = result.imagePrompt || generateFallbackPrompt(result, language);
+                                navigator.clipboard.writeText(promptToCopy);
+                                toast.success(language === 'zh' ? '提示词已复制！' : 'Prompt copied!');
+                            }}
+                            data-html2canvas-ignore
+                            className="absolute top-4 left-28 p-2 rounded-full transition-all z-20 backdrop-blur-sm bg-black/30 hover:bg-black/50 text-white"
+                            title={language === 'zh' ? '复制提示词' : 'Copy Prompt'}
+                        >
+                            <Copy size={20} />
+                        </button>
+                    )}
                 </div>
 
                 {/* Content */}
@@ -262,9 +306,54 @@ export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onRes
                         {isHistoryView && <span className="text-xs font-bold text-stone-500 bg-stone-100 px-3 py-1 rounded-full uppercase tracking-wide border border-stone-200 ml-2">{t('archived', language)}</span>}
                     </div>
 
-                    <h2 className="text-2xl font-display font-bold text-stone-800 mb-1 leading-tight">
-                        {result.dishName}
-                    </h2>
+                    <div className="flex items-center justify-center gap-2 mb-1">
+                        {isEditingName ? (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={editedName}
+                                    onChange={(e) => setEditedName(e.target.value)}
+                                    className="text-2xl font-display font-bold text-stone-800 text-center bg-stone-100 rounded-lg px-2 py-1 border-2 border-amber-400 focus:outline-none focus:border-amber-500"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && editedName.trim()) {
+                                            result.customName = editedName.trim();
+                                            setIsEditingName(false);
+                                        } else if (e.key === 'Escape') {
+                                            setIsEditingName(false);
+                                        }
+                                    }}
+                                />
+                                <button
+                                    onClick={() => {
+                                        if (editedName.trim()) {
+                                            result.customName = editedName.trim();
+                                            setIsEditingName(false);
+                                        }
+                                    }}
+                                    className="p-1.5 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
+                                >
+                                    <Check size={16} />
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <h2 className="text-2xl font-display font-bold text-stone-800 leading-tight">
+                                    {displayDishName}
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setEditedName(displayDishName);
+                                        setIsEditingName(true);
+                                    }}
+                                    className="p-1.5 text-stone-400 hover:text-amber-500 transition-colors"
+                                    title={language === 'zh' ? '编辑名称' : 'Edit Name'}
+                                >
+                                    <Pencil size={16} />
+                                </button>
+                            </>
+                        )}
+                    </div>
 
                     <p className="text-stone-500 mb-4 leading-relaxed text-sm">
                         {result.description}

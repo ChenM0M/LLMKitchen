@@ -90,17 +90,17 @@ export const PrepStation: React.FC<PrepStationProps> = ({
     };
 
     return (
-        <div className="h-full flex flex-col items-center justify-center gap-4 p-4">
+        <div className="h-full flex flex-col items-center justify-start gap-2 sm:gap-4 p-2 sm:p-4 overflow-hidden">
             {/* Warning for max processed items */}
             {hasMaxProcessed && (
-                <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg text-sm">
+                <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg text-sm flex-shrink-0">
                     <AlertCircle size={16} />
                     <span>{getProcessLimitMessage(language)}</span>
                 </div>
             )}
 
-            {/* Visual Area */}
-            <div className="flex-1 w-full min-h-0 flex items-center justify-center relative overflow-auto pb-4">
+            {/* Visual Area - 可滚动 */}
+            <div className="flex-1 w-full min-h-0 flex items-start justify-center relative overflow-y-auto pb-4">
                 {items.length === 0 ? (
                     <div className="text-stone-400 font-display text-lg opacity-50 text-center px-4">
                         {t('emptyStation', language)}

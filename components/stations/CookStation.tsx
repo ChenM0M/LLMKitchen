@@ -102,8 +102,8 @@ export const CookStation: React.FC<CookStationProps> = ({
                 </div>
             )}
 
-            {/* 食材展示区 - 占据主要空间 */}
-            <div className="flex-1 flex items-center justify-center overflow-auto min-h-0">
+            {/* 食材展示区 - 占据主要空间，可滚动 */}
+            <div className="flex-1 flex items-start justify-center overflow-y-auto min-h-0">
                 {items.length === 0 ? (
                     <div className="text-stone-400 text-lg opacity-50 text-center">
                         {t('emptyStation', language)}

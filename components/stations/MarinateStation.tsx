@@ -28,8 +28,8 @@ export const MarinateStation: React.FC<MarinateStationProps> = ({
     return (
         <div className="h-full flex flex-col items-center justify-center gap-4 sm:gap-8">
 
-            {/* Visual Area */}
-            <div className="flex-1 w-full flex items-center justify-center relative overflow-auto">
+            {/* Visual Area - 可滚动 */}
+            <div className="flex-1 w-full flex items-start justify-center relative overflow-y-auto min-h-0">
                 {items.length === 0 ? (
                     <div className="text-stone-400 font-display text-lg sm:text-xl opacity-50 text-center px-4">
                         {t('emptyStation', language)}

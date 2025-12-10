@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { INGREDIENTS, SEASONINGS } from '../constants';
 import { Ingredient, Language, GameMode, Theme } from '../types';
 import {
   Plus, ChevronDown, ChevronRight, Apple, Beef, Carrot, Wheat, Milk, Cookie,
-  Spline, Flame, Nut, Droplets, Beer, Martini, Citrus, Search, Star, Clock, X
+  Spline, Flame, Nut, Droplets, Beer, Martini, Citrus, Search, Star, Clock, X, PlusCircle
 } from 'lucide-react';
 import { t } from '../translations';
 import { useIngredientPreferences, useIngredientSearch } from '../hooks/useIngredientPreferences';
@@ -205,6 +205,49 @@ export const Pantry: React.FC<PantryProps> = ({
   const { favorites, recentlyUsed, toggleFavorite, addToRecent, isFavorite } = useIngredientPreferences();
   const { searchQuery, setSearchQuery, filteredIngredients, clearSearch, isSearching } = useIngredientSearch(allIngredients);
 
+  // 自定义食材状态
+  const [customIngredients, setCustomIngredients] = useState<Ingredient[]>(() => {
+    const saved = localStorage.getItem('cookingGenius_customIngredients');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newIngredient, setNewIngredient] = useState({ name: '', emoji: '🍽️', price: 5 });
+
+  // Emoji 选择列表
+  const emojiOptions = [
+    '🍽️', '🍲', '🍳', '🍕', '🍔', '🌮', '🌯', '🥙', '🧆', '🥨',
+    '🍜', '🍝', '🍛', '🥡', '🥘', '🍚', '🍙', '🍘', '🥟', '🥠',
+    '🥫', '🍱', '🍗', '🍖', '🥩', '🥓', '🦑', '🦐', '🦪', '🍤',
+    '🍣', '🍢', '🥪', '🍐', '🍎', '🍊', '🍋', '🍌', '🍇', '🍓',
+    '🥝', '🥥', '🍑', '🍒', '🍍', '🥭', '🫐', '🥑', '🍆', '🥔',
+    '🥕', '🌽', '🌶️', '🫑', '🥜', '🦜', '🌰', '🍪', '🍰', '🎂',
+    '🥧', '🍩', '🍦', '🍧', '🍨', '🧁', '🥤', '🍺', '🍻', '🍸',
+    '🍷', '🥃', '☕', '🍵', '🧉', '🧂', '🧈', '🥛', '🍹', '🧋'
+  ];
+
+  // 保存自定义食材到 localStorage
+  useEffect(() => {
+    localStorage.setItem('cookingGenius_customIngredients', JSON.stringify(customIngredients));
+  }, [customIngredients]);
+
+  const handleAddCustomIngredient = () => {
+    if (!newIngredient.name.trim()) return;
+
+    const ingredient: Ingredient = {
+      id: `custom_${Date.now()}`,
+      name: newIngredient.name.trim(),
+      nameZh: newIngredient.name.trim(),
+      emoji: newIngredient.emoji,
+      category: 'seasoning', // 默认分类
+      color: 'bg-purple-400',
+      price: newIngredient.price
+    };
+
+    setCustomIngredients(prev => [...prev, ingredient]);
+    setNewIngredient({ name: '', emoji: '🍽️', price: 5 });
+    setShowAddModal(false);
+  };
+
   const toggle = (key: string) => {
     setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
   };
@@ -269,6 +312,19 @@ export const Pantry: React.FC<PantryProps> = ({
 
       <div className="relative z-10 space-y-2 p-1">
 
+        {/* Add Custom Ingredient Button */}
+        <button
+          onClick={() => setShowAddModal(true)}
+          className={`w-full flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 border-dashed transition-all
+            ${isJapanese
+              ? 'border-jp-indigo/50 text-jp-indigo hover:border-jp-indigo hover:bg-jp-indigo/10'
+              : 'border-amber-400/50 text-amber-600 hover:border-amber-500 hover:bg-amber-50'
+            }`}
+        >
+          <PlusCircle size={18} />
+          <span className="text-sm font-bold">{language === 'zh' ? '添加自定义食材' : 'Add Custom Ingredient'}</span>
+        </button>
+
         {/* Search Bar */}
         <div className="relative mb-3">
           <div className="relative">
@@ -324,6 +380,40 @@ export const Pantry: React.FC<PantryProps> = ({
               <p className="text-xs text-stone-400 text-center py-2">
                 {isZh ? '没有找到匹配的食材' : 'No matching ingredients'}
               </p>
+            )}
+          </div>
+        )}
+
+        {/* My Custom Ingredients Section */}
+        {customIngredients.length > 0 && !isSearching && (
+          <div className={`rounded-xl border-2 overflow-hidden mb-2 ${isJapanese ? 'bg-purple-50/80 border-purple-200' : 'bg-purple-50/80 border-purple-200'}`}>
+            <button
+              onClick={() => toggle('custom')}
+              className="w-full flex items-center justify-between p-2 bg-purple-100/80 hover:bg-purple-100 transition-colors border-b border-purple-200"
+            >
+              <div className="flex items-center gap-2">
+                <PlusCircle size={14} className="text-purple-500" />
+                <span className="text-xs font-bold text-purple-700">{language === 'zh' ? '我的食材' : 'My Ingredients'}</span>
+                <span className="bg-purple-400 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">{customIngredients.length}</span>
+              </div>
+              {expanded.custom ? <ChevronDown size={14} className="text-purple-600" /> : <ChevronRight size={14} className="text-purple-600" />}
+            </button>
+            {expanded.custom && (
+              <div className="grid grid-cols-4 sm:grid-cols-3 gap-2 p-2">
+                {customIngredients.map(item => (
+                  <IngredientButton
+                    key={item.id}
+                    item={item}
+                    language={language}
+                    gameMode={gameMode}
+                    money={money}
+                    theme={theme}
+                    onSpawn={handleSpawn}
+                    isFavorite={isFavorite(item.id)}
+                    onToggleFavorite={toggleFavorite}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -431,6 +521,91 @@ export const Pantry: React.FC<PantryProps> = ({
           </>
         )}
       </div>
+
+      {/* Add Custom Ingredient Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-4 text-center">
+              {language === 'zh' ? '添加自定义食材' : 'Add Custom Ingredient'}
+            </h3>
+
+            {/* Name Input */}
+            <div className="mb-4">
+              <label className="text-sm font-medium text-stone-600 mb-1 block">
+                {language === 'zh' ? '食材名称' : 'Ingredient Name'}
+              </label>
+              <input
+                type="text"
+                value={newIngredient.name}
+                onChange={(e) => setNewIngredient(prev => ({ ...prev, name: e.target.value }))}
+                placeholder={language === 'zh' ? '输入名称...' : 'Enter name...'}
+                className="w-full px-3 py-2 border-2 border-stone-200 rounded-lg focus:border-amber-400 focus:outline-none"
+              />
+            </div>
+
+            {/* Emoji Selector */}
+            <div className="mb-4">
+              <label className="text-sm font-medium text-stone-600 mb-1 block">
+                {language === 'zh' ? '选择图标' : 'Select Emoji'}
+              </label>
+              <div className="grid grid-cols-10 gap-1 max-h-32 overflow-y-auto p-2 bg-stone-50 rounded-lg border border-stone-200">
+                {emojiOptions.map((emoji, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setNewIngredient(prev => ({ ...prev, emoji }))}
+                    className={`text-xl p-1 rounded hover:bg-stone-200 transition-colors
+                      ${newIngredient.emoji === emoji ? 'bg-amber-200 ring-2 ring-amber-400' : ''}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Price Input */}
+            <div className="mb-4">
+              <label className="text-sm font-medium text-stone-600 mb-1 block">
+                {language === 'zh' ? '价格' : 'Price'} ($)
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={newIngredient.price}
+                onChange={(e) => setNewIngredient(prev => ({ ...prev, price: Math.max(1, parseInt(e.target.value) || 1) }))}
+                className="w-full px-3 py-2 border-2 border-stone-200 rounded-lg focus:border-amber-400 focus:outline-none"
+              />
+            </div>
+
+            {/* Preview */}
+            <div className="mb-4 p-3 bg-stone-50 rounded-lg flex items-center gap-3">
+              <span className="text-3xl">{newIngredient.emoji}</span>
+              <div>
+                <div className="font-bold text-stone-800">{newIngredient.name || (language === 'zh' ? '食材名称' : 'Ingredient Name')}</div>
+                <div className="text-sm text-green-600 font-medium">${newIngredient.price}</div>
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="flex-1 py-2 px-4 border-2 border-stone-200 rounded-lg text-stone-600 font-medium hover:bg-stone-50"
+              >
+                {language === 'zh' ? '取消' : 'Cancel'}
+              </button>
+              <button
+                onClick={handleAddCustomIngredient}
+                disabled={!newIngredient.name.trim()}
+                className="flex-1 py-2 px-4 bg-amber-500 text-white rounded-lg font-medium hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {language === 'zh' ? '添加' : 'Add'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

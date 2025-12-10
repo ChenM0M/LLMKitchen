@@ -58,7 +58,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   const isJapanese = theme === 'japanese';
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden transition-colors duration-500
+    <div className={`min-h-[100dvh] flex flex-col items-center justify-start py-8 sm:py-12 p-4 relative overflow-y-auto transition-colors duration-500
         ${isJapanese ? 'bg-seigaiha text-stone-800' : 'bg-[#fef3c7]'}`}
     >
 
@@ -213,40 +213,40 @@ export const StartScreen: React.FC<StartScreenProps> = ({
       <div className="relative z-10 max-w-2xl w-full text-center">
 
         {/* Logo/Header */}
-        <div className="mb-12 animate-slide-up">
-          <div className={`inline-block p-6 mb-6 shadow-2xl transition-all
+        <div className="mb-6 sm:mb-12 animate-slide-up">
+          <div className={`inline-block p-4 sm:p-6 mb-4 sm:mb-6 shadow-2xl transition-all
              ${isJapanese ? 'bg-white rounded-xl ring-4 ring-jp-800' : 'bg-white rounded-full ring-8 ring-stone-100'}
           `}>
-            <ChefHat size={64} className={isJapanese ? "text-jp-indigo" : "text-chef-500"} />
+            <ChefHat size={48} className={`sm:w-16 sm:h-16 ${isJapanese ? "text-jp-indigo" : "text-chef-500"}`} />
           </div>
-          <h1 className={`text-5xl md:text-6xl font-black text-stone-800 mb-2 drop-shadow-sm tracking-tight ${isJapanese ? 'font-serif' : 'font-display'}`}>
+          <h1 className={`text-4xl sm:text-5xl md:text-6xl font-black text-stone-800 mb-2 drop-shadow-sm tracking-tight ${isJapanese ? 'font-serif' : 'font-display'}`}>
             AI Pocket Kitchen
           </h1>
-          <p className="text-xl text-stone-500 font-medium">
+          <p className="text-lg sm:text-xl text-stone-500 font-medium">
             {t('cookAnything', language)}
           </p>
         </div>
 
         {/* Mode Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 animate-slide-up" style={{ animationDelay: '0.2s' }}>
 
           {/* Sandbox Mode */}
           <button
             onClick={() => handleSelect('SANDBOX')}
-            className={`group relative bg-white p-8 border-4 shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col items-center text-center
+            className={`group relative bg-white p-5 sm:p-8 border-4 shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col items-center text-center
                 ${isJapanese ? 'rounded-lg border-stone-200 hover:border-jp-indigo font-serif' : 'rounded-3xl border-stone-100 hover:border-chef-300 font-display'}
             `}
           >
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform
+            <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform
                  ${isJapanese ? 'bg-indigo-50 text-jp-indigo' : 'bg-blue-100 text-blue-500'}
             `}>
-              <Utensils size={32} />
+              <Utensils size={28} className="sm:w-8 sm:h-8" />
             </div>
-            <h3 className={`text-2xl font-bold text-stone-800 mb-2 ${isJapanese ? 'group-hover:text-jp-indigo' : 'group-hover:text-chef-600'}`}>{t('sandboxMode', language)}</h3>
-            <p className="text-stone-500 text-sm leading-relaxed">
+            <h3 className={`text-xl sm:text-2xl font-bold text-stone-800 mb-1 sm:mb-2 ${isJapanese ? 'group-hover:text-jp-indigo' : 'group-hover:text-chef-600'}`}>{t('sandboxMode', language)}</h3>
+            <p className="text-stone-500 text-xs sm:text-sm leading-relaxed">
               {t('sandboxDesc', language)}
             </p>
-            <div className={`mt-4 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full
+            <div className={`mt-3 sm:mt-4 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full
                  ${isJapanese ? 'bg-indigo-50 text-jp-indigo' : 'bg-blue-50 text-blue-400'}
             `}>
               {t('freePlay', language)}
@@ -257,23 +257,23 @@ export const StartScreen: React.FC<StartScreenProps> = ({
           <div className="flex flex-col gap-3">
             <button
               onClick={() => handleSelect('CHALLENGE')}
-              className={`group relative bg-white p-8 border-4 shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col items-center text-center
+              className={`group relative bg-white p-5 sm:p-8 border-4 shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 flex flex-col items-center text-center
                   ${isJapanese ? 'rounded-lg border-stone-200 hover:border-jp-indigo font-serif' : 'rounded-3xl border-stone-100 hover:border-chef-300 font-display'}
               `}
             >
               <div className="absolute top-4 right-4">
                 <Sparkles className="text-yellow-400 animate-pulse" />
               </div>
-              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform
+              <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform
                    ${isJapanese ? 'bg-orange-50 text-orange-600' : 'bg-orange-100 text-orange-500'}
               `}>
-                <Trophy size={32} />
+                <Trophy size={28} className="sm:w-8 sm:h-8" />
               </div>
-              <h3 className={`text-2xl font-bold text-stone-800 mb-2 ${isJapanese ? 'group-hover:text-jp-indigo' : 'group-hover:text-chef-600'}`}>{t('challengeMode', language)}</h3>
-              <p className="text-stone-500 text-sm leading-relaxed">
+              <h3 className={`text-xl sm:text-2xl font-bold text-stone-800 mb-1 sm:mb-2 ${isJapanese ? 'group-hover:text-jp-indigo' : 'group-hover:text-chef-600'}`}>{t('challengeMode', language)}</h3>
+              <p className="text-stone-500 text-xs sm:text-sm leading-relaxed">
                 {t('challengeDesc', language)}
               </p>
-              <div className={`mt-4 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full
+              <div className={`mt-3 sm:mt-4 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full
                    ${isJapanese ? 'bg-orange-50 text-orange-600' : 'bg-orange-50 text-orange-400'}
               `}>
                 {hasSave ? (language === 'zh' ? '新游戏' : 'New Game') : t('career', language)}
