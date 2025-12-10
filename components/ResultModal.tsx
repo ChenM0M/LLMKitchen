@@ -22,6 +22,7 @@ interface ResultModalProps {
     onToggleSave?: () => void; // This prop is still present in the original code, but the diff implies it might be removed. Keeping it as per "without making any unrelated edits"
     isOpen: boolean; // Added as per diff
     onRetry?: () => void; // Added as per diff (implied by usage in component signature)
+    onUpdateDish?: (dish: DishResult, updates: Partial<DishResult>) => void; // 用于更新菜名等信息
 }
 
 // 为旧菜品生成备用提示词（用于复制功能）
@@ -46,7 +47,7 @@ RESTRICTIONS:
     return prompt;
 };
 
-export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onReset, customer, isHistoryView = false, language, isSaved, onToggleSave }) => {
+export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onReset, customer, isHistoryView = false, language, isSaved, onToggleSave, onUpdateDish }) => {
     const cardRef = useRef<HTMLDivElement>(null);
     const exportCardRef = useRef<HTMLDivElement>(null);
     const [isSharing, setIsSharing] = useState(false);
@@ -162,7 +163,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onRes
             }
 
             const link = document.createElement('a');
-            link.download = `CookingGenius-Premium-${result.dishName}-${Date.now()}.png`;
+            link.download = `CookingGenius-Premium-${displayDishName}-${Date.now()}.png`;
             link.href = canvas.toDataURL('image/png');
             document.body.appendChild(link);
             link.click();
@@ -317,7 +318,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onRes
                                     autoFocus
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && editedName.trim()) {
-                                            result.customName = editedName.trim();
+                                            onUpdateDish?.(result, { customName: editedName.trim() });
                                             setIsEditingName(false);
                                         } else if (e.key === 'Escape') {
                                             setIsEditingName(false);
@@ -327,7 +328,7 @@ export const ResultModal: React.FC<ResultModalProps> = ({ result, onClose, onRes
                                 <button
                                     onClick={() => {
                                         if (editedName.trim()) {
-                                            result.customName = editedName.trim();
+                                            onUpdateDish?.(result, { customName: editedName.trim() });
                                             setIsEditingName(false);
                                         }
                                     }}

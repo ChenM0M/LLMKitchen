@@ -6,6 +6,7 @@ import { JUDGE_PERSONAS } from '../constants';
 interface ExportCardProps {
     result: {
         dishName: string;
+        customName?: string;  // 用户自定义菜名
         description: string;
         emoji: string;
         score: number;
@@ -120,7 +121,7 @@ export const ExportCard = forwardRef<HTMLDivElement, ExportCardProps>(({ result,
                 <div className="flex items-baseline justify-between gap-4 shrink-0 mb-3">
                     <h1 className="text-5xl font-black text-stone-900 leading-[1.1] tracking-tight break-words flex-1 -ml-0.5"
                         style={{ textShadow: '2px 2px 0px rgba(255,255,255,0.5)' }}>
-                        {result.dishName}
+                        {result.customName || result.dishName}
                     </h1>
                     <div className="flex flex-col items-end shrink-0 pl-4">
                         <span className="text-6xl font-black leading-[0.8]" style={{ color: accentColor, fontFamily: '"Playfair Display", serif' }}>{result.score}</span>

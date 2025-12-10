@@ -213,7 +213,7 @@ export const RecipeBook: React.FC<RecipeBookProps> = ({ isOpen, onClose, history
 
                                     <div className="flex-1 min-w-0 py-1">
                                         <h3 className="font-display font-bold text-stone-800 truncate leading-tight mb-1 group-hover:text-chef-600 transition-colors text-lg">
-                                            {dish.dishName}
+                                            {dish.customName || dish.dishName}
                                         </h3>
 
                                         {dish.customerName ? (

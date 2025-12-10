@@ -596,6 +596,7 @@ const App: React.FC = () => {
                     isHistoryView={isViewingHistory}
                     isSaved={cooking.lastResult ? cooking.savedRecipes.some(r => r.dishName === cooking.lastResult?.dishName && r.description === cooking.lastResult?.description) : false}
                     onToggleSave={() => cooking.lastResult && cooking.toggleSaveRecipe(cooking.lastResult)}
+                    onUpdateDish={cooking.updateDish}
                 />
 
                 <RecipeBook

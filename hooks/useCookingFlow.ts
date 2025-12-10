@@ -380,6 +380,26 @@ export const useCookingFlow = (language: Language) => {
         });
     };
 
+    // 更新菜品信息（如自定义菜名）
+    const updateDish = (dish: DishResult, updates: Partial<DishResult>) => {
+        // 更新历史记录
+        setHistory(prev => prev.map(d =>
+            d.dishName === dish.dishName && d.description === dish.description
+                ? { ...d, ...updates }
+                : d
+        ));
+        // 更新收藏
+        setSavedRecipes(prev => prev.map(d =>
+            d.dishName === dish.dishName && d.description === dish.description
+                ? { ...d, ...updates }
+                : d
+        ));
+        // 更新当前结果
+        if (lastResult && lastResult.dishName === dish.dishName && lastResult.description === dish.description) {
+            setLastResult({ ...lastResult, ...updates });
+        }
+    };
+
     return {
         // State
         isCooking,
@@ -402,6 +422,7 @@ export const useCookingFlow = (language: Language) => {
         toggleSaveRecipe,
         deleteRecipe,
         clearAllRecipes,
-        sortRecipes
+        sortRecipes,
+        updateDish
     };
 };
